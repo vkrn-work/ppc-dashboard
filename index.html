@@ -1568,6 +1568,56 @@ function wkLabel(mk, weekNum) {
   return `${weekNum} нед ${mn}.${yr}`;
 }
 
+// Вычисляет дату последнего рабочего дня недели weekNum в месяце mk ("2026-03").
+// Зеркалит логику calendar_2026 из Code.gs.
+function weekEndDate(mk, weekNum) {
+  const [y, m] = mk.split('-').map(Number);
+  const isWorkday = d => { const dw = d.getDay(); return dw !== 0 && dw !== 6; }; // без выходных (праздники не учитываем — достаточно точно)
+
+  const daysInMonth = new Date(y, m, 0).getDate();
+
+  // Находим первый понедельник месяца
+  let firstMonday = -1;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(y, m - 1, day);
+    if (d.getDay() === 1) { firstMonday = day; break; }
+  }
+
+  // weekOf[day] — номер недели для каждого дня (как в Code.gs)
+  const weekOf = {};
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(y, m - 1, day);
+    if (!isWorkday(d)) continue;
+    if (firstMonday === -1) { weekOf[day] = 1; continue; }
+    if (day < firstMonday) {
+      weekOf[day] = 1;
+    } else {
+      const fw = [firstMonday, firstMonday+7, firstMonday+14];
+      if      (day <= fw[0] + 4)                               weekOf[day] = 1;
+      else if (fw[1] && day >= fw[1] && day <= fw[1] + 4)     weekOf[day] = 2;
+      else if (fw[2] && day >= fw[2] && day <= fw[2] + 4)     weekOf[day] = 3;
+      else                                                      weekOf[day] = 4;
+    }
+  }
+
+  // Последний рабочий день с нужным номером недели
+  let lastDay = null;
+  for (let day = daysInMonth; day >= 1; day--) {
+    if (weekOf[day] === weekNum) { lastDay = day; break; }
+  }
+  if (!lastDay) return null;
+  return new Date(y, m - 1, lastDay);
+}
+
+// Возвращает true если неделя полностью завершена (последний рабочий день < сегодня)
+function isWeekCompleted(mk, weekNum) {
+  const end = weekEndDate(mk, weekNum);
+  if (!end) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return end < today;
+}
+
 // ── Загрузка: собираем недели за все месяцы с данными ──────────
 async function loadWeekly() {
   load('Загрузка недель...');
@@ -1602,28 +1652,15 @@ async function loadWeekly() {
       }
 
       const rows = cached.monthly || [];
-      // Определяем какие недели завершены для этого месяца
-      // Для прошлых месяцев — все итог_нед завершены
-      // Для текущего — только те, у которых weekNum < текущей активной недели
-      let curWeekNum = 0;
-      if (mk === curMk) {
-        const todayLabel = String(today.getDate()).padStart(2,'0') + '.' + String(today.getMonth()+1).padStart(2,'0');
-        const dayRow = rows.find(r =>
-          r['Специалист'] === tgt &&
-          (r['Тип'] === 'день' || r['Тип'] === 'день_буд') &&
-          _mkFromRow_(r, 'Месяц') === mk &&
-          r['Метка'] === todayLabel
-        );
-        curWeekNum = dayRow ? Number(dayRow['Неделя']||0) : 99;
-      }
 
       rows
-        .filter(r =>
-          r['Специалист'] === tgt &&
-          r['Тип'] === 'итог_нед' &&
-          _mkFromRow_(r, 'Месяц') === mk &&
-          (mk < curMk || Number(r['Неделя']||0) < curWeekNum)
-        )
+        .filter(r => {
+          if (r['Тип'] !== 'итог_нед') return false;
+          if (_mkFromRow_(r, 'Месяц') !== mk) return false;
+          const wn = Number(r['Неделя']||0);
+          // Неделя завершена только если её последний рабочий день уже прошёл
+          return isWeekCompleted(mk, wn);
+        })
         .forEach(r => {
           const wn = Number(r['Неделя']||0);
           const k  = `${mk}|${wn}`;
@@ -1632,9 +1669,8 @@ async function loadWeekly() {
           allWeeks.push({ mk, weekNum: wn, row: r });
         });
 
-      // Если нашли хоть какие-то данные в этом месяце — продолжаем назад
-      // Если месяц пустой — прекращаем
-      const hasAny = rows.some(r => r['Специалист'] === tgt && r['Тип'] === 'итог_нед');
+      // Прекращаем идти назад если месяц вообще без строк итог_нед
+      const hasAny = rows.some(r => r['Тип'] === 'итог_нед');
       if (!hasAny && i > 0) break;
     }
 
