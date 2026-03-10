@@ -394,7 +394,12 @@ body { background: var(--bg0); color: var(--text); font-family: var(--font); min
 <div class="page" id="tab-yearly">
   <div class="toolbar">
     <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">Ретроспектива 2026</div>
-    <div class="spec-tabs mgr" id="specTabsYr" style="display:none"></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" id="yrPlanToggle" onclick="toggleYrPlan()">
+        <span id="yrPlanIcon">☐</span>&nbsp;Показывать план&nbsp;/&nbsp;%&nbsp;вып.
+      </button>
+      <div class="spec-tabs mgr" id="specTabsYr" style="display:none"></div>
+    </div>
   </div>
 
   <!-- YEARLY TABLE + CHART -->
@@ -478,7 +483,7 @@ body { background: var(--bg0); color: var(--text); font-family: var(--font); min
 // ══════════════════════════════════════════════════════════════
 //  ★  CONFIG — замените URL после деплоя Apps Script
 // ══════════════════════════════════════════════════════════════
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyDySMiDlmFco21jGzcrJxgvGGG1oyV0P98x63Kc2b-QS0MlJWkF4ZSeOnD99vrJT4o/exec';
+const SCRIPT_URL = 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
 
 // ══════════════════════════════════════════════════════════════
 //  CONSTANTS
@@ -504,6 +509,7 @@ let S = {
   kpi:[], monthly:[], yearly:[], log:[]
 };
 let CH = {};
+let YR_SHOW_PLAN = false;
 let gaugeChart = null;
 
 // ══════════════════════════════════════════════════════════════
@@ -948,45 +954,101 @@ function redrawSideChart(id, labels, datasets, gridColor, tickColor) {
 // ══════════════════════════════════════════════════════════════
 //  YEARLY TABLE
 // ══════════════════════════════════════════════════════════════
+function toggleYrPlan() {
+  YR_SHOW_PLAN = !YR_SHOW_PLAN;
+  const btn  = document.getElementById('yrPlanToggle');
+  const icon = document.getElementById('yrPlanIcon');
+  if (YR_SHOW_PLAN) {
+    icon.textContent = '☑';
+    btn.style.borderColor  = 'var(--accent)';
+    btn.style.color        = 'var(--accent)';
+  } else {
+    icon.textContent = '☐';
+    btn.style.borderColor  = '';
+    btn.style.color        = '';
+  }
+  renderYrTable();
+}
+
 function renderYrTable() {
   const wrap = document.getElementById('yrTblWrap');
   const sp   = IS_MGR ? S.selSpec : SPEC_ID;
   const tgt  = (sp==='manager'||sp==='Все') ? 'Все' : sp;
 
   const dirs = getDirsForSpec(tgt);
-  const rows = S.yearly.filter(r => r['Специалист']===tgt);
-  if (!rows.length) { wrap.innerHTML='<div class="empty">Нет данных</div>'; return; }
+  const allRows = S.yearly.filter(r => r['Специалист']===tgt);
+  if (!allRows.length) { wrap.innerHTML='<div class="empty">Нет данных</div>'; return; }
 
-  const YCOLS  = ['Клики','CPC','Заявки','CR%','БП','%БП','Расход','CPL','Цена БП'];
-  const YKEYS  = ['Клики','CPC','MQL','CR%','SQL','%БП','Расход','CPL','CPsql'];
+  // Index rows by month+type for quick lookup
+  const byKey = {};
+  allRows.forEach(r => { byKey[`${r['Месяц']}__${r['Тип']}`] = r; });
 
+  const YCOLS = ['Клики','CPC','Заявки','CR%','БП','%БП','Расход','CPL','Цена БП'];
+  const YKEYS = ['Клики','CPC','MQL','CR%','SQL','%БП','Расход','CPL','CPsql'];
+
+  // Header
   let thead = `<thead>
-    <tr><th class="fix" rowspan="2" style="min-width:100px">Месяц</th>`;
+    <tr><th class="fix" rowspan="2" style="min-width:110px">Месяц</th>`;
   dirs.forEach((d,i) => {
     const dc = `style="background:${DIR_BG[i%DIR_BG.length]};border-left:2px solid ${DIR_COLORS[i%DIR_COLORS.length]}"`;
     thead += `<th class="dh" colspan="${YCOLS.length}" ${dc}>${d}</th>`;
   });
   thead += `</tr><tr>`;
-  dirs.forEach((d,i) => {
+  dirs.forEach((_,i) => {
     YCOLS.forEach(m => { thead += `<th class="col-dir${i}">${m}</th>`; });
   });
   thead += `</tr></thead>`;
 
-  const typeMap = {'факт':'y-fact','план':'y-plan','процент':'y-pct','итого':'y-total','среднее':'y-avg'};
+  // One row per month (fact + plan sub-label) + итого + среднее
+  const MONTH_NAMES = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
   let tbody = '<tbody>';
-  rows.forEach(r => {
-    const tp  = r['Тип']||'';
-    const cls = typeMap[tp]||'';
-    tbody += `<tr class="${cls}"><td class="fix">${r['Месяц']||'—'}</td>`;
+
+  MONTH_NAMES.forEach(mn => {
+    const factRow = byKey[`${mn}__факт`];
+    const planRow = byKey[`${mn}__план`];
+    const pctRow  = byKey[`${mn}__процент`];
+    if (!factRow && !planRow) return; // месяц не существует в данных
+
+    tbody += `<tr class="y-fact"><td class="fix" style="vertical-align:middle">${mn}</td>`;
     dirs.forEach((dir,i) => {
       YKEYS.forEach((dk,ki) => {
-        const colKey = `${dir}__${dk}`;
-        const v = r[colKey];
-        tbody += `<td class="col-dir${i}">${fmtCell(v, YCOLS[ki], tp==='процент'?'процент':'')}</td>`;
+        const fv = factRow ? factRow[`${dir}__${dk}`] : null;
+        const pv = planRow ? planRow[`${dir}__${dk}`] : null;
+        const pctv = pctRow ? pctRow[`${dir}__${dk}`] : null;
+
+        const fmtFact = fmtCell(fv, YCOLS[ki], '');
+        let sub = '';
+        if (YR_SHOW_PLAN && pv !== null && pv !== undefined && pv !== '') {
+          sub = `<div style="font-size:9px;color:var(--text3);font-weight:400;margin-top:1px">${fmtCell(pv, YCOLS[ki], '')} план</div>`;
+        }
+        let pctBadge = '';
+        if (YR_SHOW_PLAN && pctv !== null && pctv !== undefined && pctv !== '' && Number(pctv) > 0) {
+          const cls = ccl(Number(pctv));
+          pctBadge = `<div style="margin-top:2px"><span class="pct-badge pg-${cls.replace('c','')}" style="font-size:9px;padding:1px 5px">${Number(pctv)}%</span></div>`;
+        }
+        tbody += `<td class="col-dir${i}" style="vertical-align:top">${fmtFact}${sub}${pctBadge}</td>`;
       });
     });
     tbody += `</tr>`;
   });
+
+  // Итого и среднее
+  ['итого','среднее'].forEach(tp => {
+    const r = byKey[`ИТОГО ГОД__${tp}`] || byKey[`В СРЕДНЕМ/МЕС__${tp}`] ||
+              allRows.find(x => x['Тип']===tp);
+    if (!r) return;
+    const label = tp==='итого' ? 'ИТОГО' : 'СРЕДНЕЕ/МЕС';
+    const cls   = tp==='итого' ? 'y-total' : 'y-avg';
+    tbody += `<tr class="${cls}"><td class="fix">${label}</td>`;
+    dirs.forEach((dir,i) => {
+      YKEYS.forEach((dk,ki) => {
+        const v = r[`${dir}__${dk}`];
+        tbody += `<td class="col-dir${i}">${fmtCell(v, YCOLS[ki], '')}</td>`;
+      });
+    });
+    tbody += `</tr>`;
+  });
+
   tbody += '</tbody>';
   wrap.innerHTML = `<table class="ytbl">${thead}${tbody}</table>`;
 }
@@ -1297,7 +1359,7 @@ function showToast(msg, err) {
 // ══════════════════════════════════════════════════════════════
 //  SETUP CHECK & START
 // ══════════════════════════════════════════════════════════════
-if (SCRIPT_URL==='YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
+if (SCRIPT_URL==='https://script.google.com/macros/s/AKfycbyDySMiDlmFco21jGzcrJxgvGGG1oyV0P98x63Kc2b-QS0MlJWkF4ZSeOnD99vrJT4o/exec') {
   initTheme();
   document.getElementById('overlay').innerHTML = `
     <div style="text-align:center;max-width:480px;padding:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;margin:20px">
