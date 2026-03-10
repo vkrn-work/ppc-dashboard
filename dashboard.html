@@ -205,14 +205,14 @@ body { background: var(--bg0); color: var(--text); font-family: var(--font); min
 .week-label-a { background: var(--accent-bg); color: var(--accent); }
 .week-label-b { background: rgba(82,204,194,.12); color: var(--teal); }
 
-/* ═══════ MAIN TABLE AREA (table + mini chart) ═══════ */
-.table-chart-wrap { display: grid; grid-template-columns: 1fr 200px; gap: 0; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; margin-bottom: 14px; }
-@media(max-width:1200px) { .table-chart-wrap { grid-template-columns: 1fr; } }
+/* ═══════ CHARTS ROW (below tables) ═══════ */
+.mon-charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+@media(max-width:800px) { .mon-charts-row { grid-template-columns: 1fr; } }
+.mon-chart-card { padding: 14px 16px; }
+.chart-side-ttl { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
+
+/* ═══════ MAIN TABLE AREA ═══════ */
 .tbl-outer { overflow: auto; background: var(--bg2); }
-.chart-side { background: var(--bg2); border-left: 1px solid var(--border); padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; min-height: 200px; }
-[data-theme="light"] .chart-side { border-left-color: var(--border); }
-.chart-side-ttl { font-family: var(--mono); font-size: 8px; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); }
-.chart-side-wrap { flex: 1; position: relative; min-height: 80px; }
 
 /* ═══════ MONTHLY TABLE ═══════ */
 .mtbl { border-collapse: collapse; font-family: var(--mono); font-size: 11px; white-space: nowrap; width: 100%; }
@@ -372,20 +372,30 @@ body { background: var(--bg0); color: var(--text); font-family: var(--font); min
   </div>
 
   <!-- WEEK COMPARISON -->
-  <div class="sec-head"><div class="sec-ttl">Сравнение последних двух недель</div><div class="sec-line"></div></div>
+  <div class="sec-head" id="weekCmpHead">
+    <div class="sec-ttl">Сравнение недель</div>
+    <div class="sec-line"></div>
+    <button class="btn btn-ghost btn-sm" onclick="toggleWeekCmp()" id="weekCmpToggle">▲ Скрыть</button>
+  </div>
+  <div id="weekCmpOuter">
   <div class="card week-cmp" id="weekCmpBlock">
     <div class="empty">Загрузка...</div>
   </div>
+  </div>
 
-  <!-- MONTHLY TABLE + CHART -->
+  <!-- MONTHLY TABLE -->
   <div class="sec-head"><div class="sec-ttl">Месячная динамика</div><div class="sec-line"></div></div>
-  <div class="table-chart-wrap">
-    <div class="tbl-outer" id="monTblWrap"><div class="empty">Загрузка...</div></div>
-    <div class="chart-side">
-      <div class="chart-side-ttl">БП по неделям</div>
-      <div class="chart-side-wrap"><canvas id="cMonSql"></canvas></div>
-      <div class="chart-side-ttl" style="margin-top:8px">Цена БП (CPsql)</div>
-      <div class="chart-side-wrap"><canvas id="cMonCpsql"></canvas></div>
+  <div class="card tbl-outer" id="monTblWrap" style="margin-bottom:14px"><div class="empty">Загрузка...</div></div>
+
+  <!-- MONTHLY CHARTS below table -->
+  <div class="mon-charts-row">
+    <div class="card mon-chart-card">
+      <div class="chart-side-ttl">📊 БП (SQL) по неделям</div>
+      <div style="position:relative;height:180px"><canvas id="cMonSql"></canvas></div>
+    </div>
+    <div class="card mon-chart-card">
+      <div class="chart-side-ttl">💰 Цена БП (CPsql) по неделям</div>
+      <div style="position:relative;height:180px"><canvas id="cMonCpsql"></canvas></div>
     </div>
   </div>
 </div>
@@ -402,13 +412,19 @@ body { background: var(--bg0); color: var(--text); font-family: var(--font); min
     </div>
   </div>
 
-  <!-- YEARLY TABLE + CHART -->
+  <!-- YEARLY TABLE -->
   <div class="sec-head"><div class="sec-ttl">Годовая динамика</div><div class="sec-line"></div></div>
-  <div class="table-chart-wrap">
-    <div class="tbl-outer" id="yrTblWrap"><div class="empty">Загрузка...</div></div>
-    <div class="chart-side">
-      <div class="chart-side-ttl">БП по месяцам</div>
-      <div class="chart-side-wrap" style="min-height:160px"><canvas id="cYrSql"></canvas></div>
+  <div class="card tbl-outer" id="yrTblWrap" style="margin-bottom:14px"><div class="empty">Загрузка...</div></div>
+
+  <!-- YEARLY CHARTS below table -->
+  <div class="mon-charts-row">
+    <div class="card mon-chart-card">
+      <div class="chart-side-ttl">📊 БП по месяцам: факт vs план</div>
+      <div style="position:relative;height:200px"><canvas id="cYrSql"></canvas></div>
+    </div>
+    <div class="card mon-chart-card">
+      <div class="chart-side-ttl">💰 Цена БП по месяцам</div>
+      <div style="position:relative;height:200px"><canvas id="cYrCpsql"></canvas></div>
     </div>
   </div>
 </div>
@@ -483,7 +499,7 @@ body { background: var(--bg0); color: var(--text); font-family: var(--font); min
 // ══════════════════════════════════════════════════════════════
 //  ★  CONFIG — замените URL после деплоя Apps Script
 // ══════════════════════════════════════════════════════════════
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyRDHxVlsg7Xizl1MoSMSkwJF4cWvbdA6V1dJe70Opa4UoPQYfKav2RA8w2AdqCdjfm/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwoL6NgvaaTdG-d0xpPXBuBlFYtj2PCcBQ3SiQRx3vs_p72j42-gJ4_E56mgaqow1lR/exec';
 
 // ══════════════════════════════════════════════════════════════
 //  CONSTANTS
@@ -530,7 +546,6 @@ function initTheme() {
   document.getElementById('themeIcon').textContent = saved === 'dark' ? '☀️' : '🌙';
 }
 function redrawAllCharts() {
-  // Small delay to allow CSS vars to update
   setTimeout(() => {
     if (S.monthly.length) { renderMonCharts(); }
     if (S.yearly.length)  { renderYrCharts(); }
@@ -653,13 +668,59 @@ async function loadLog() {
 // ══════════════════════════════════════════════════════════════
 //  KPI TOP AREA
 // ══════════════════════════════════════════════════════════════
+// Build KPI row from monthly_view data when kpi_pivot is empty
+function buildKpiFromMonthly(tgt) {
+  const factRow  = S.monthly.find(r => r['Специалист']===tgt && r['Тип']==='факт');
+  const trendRow = S.monthly.find(r => r['Специалист']===tgt && r['Тип']==='тренд');
+  const planRow  = S.monthly.find(r => r['Специалист']===tgt && r['Тип']==='план');
+  const pctRow   = S.monthly.find(r => r['Специалист']===tgt && r['Тип']==='процент');
+
+  if (!factRow) return null;
+
+  const worked = Number(factRow['Отработано'])||0;
+  const total  = Number(factRow['Раб_дней']||factRow['Рабочих_дней'])||0;
+
+  const g = (row, dir, key) => row ? (Number(row[`${dir}__${key}`])||0)||null : null;
+  const dir = 'Общее';
+
+  return {
+    'Специалист':   tgt,
+    'Направление':  'Общее',
+    'Отработано':   worked,
+    'Рабочих_дней': total,
+    'Клики_факт':   g(factRow,  dir, 'Клики'),
+    'Клики_тренд':  g(trendRow, dir, 'Клики'),
+    'Клики_план':   g(planRow,  dir, 'Клики'),
+    'Клики_пвып':   g(pctRow,   dir, 'Клики'),
+    'Расход_факт':  g(factRow,  dir, 'Расход'),
+    'Расход_тренд': g(trendRow, dir, 'Расход'),
+    'Расход_план':  g(planRow,  dir, 'Расход'),
+    'Расход_пвып':  g(pctRow,   dir, 'Расход'),
+    'MQL_факт':     g(factRow,  dir, 'MQL'),
+    'MQL_тренд':    g(trendRow, dir, 'MQL'),
+    'MQL_план':     g(planRow,  dir, 'MQL'),
+    'MQL_пвып':     g(pctRow,   dir, 'MQL'),
+    'SQL_факт':     g(factRow,  dir, 'SQL'),
+    'SQL_тренд':    g(trendRow, dir, 'SQL'),
+    'SQL_план':     g(planRow,  dir, 'SQL'),
+    'SQL_пвып':     g(pctRow,   dir, 'SQL'),
+  };
+}
+
 function renderKpi() {
   const sp  = IS_MGR ? S.selSpec : SPEC_ID;
   const tgt = (sp==='manager'||sp==='Все') ? 'Все' : sp;
-  const row = S.kpi.find(r =>
+
+  // Try kpi_pivot first, fallback to computing from monthly_view
+  let row = S.kpi.find(r =>
     r['Направление']==='Общее' &&
     (tgt==='Все' ? r['Специалист']==='Все' : r['Специалист']===tgt)
   );
+
+  // FALLBACK: compute KPI from monthly_view if kpi_pivot empty
+  if (!row && S.monthly.length) {
+    row = buildKpiFromMonthly(tgt);
+  }
 
   if (!row) {
     document.getElementById('kpiMetricsBody').innerHTML =
@@ -736,56 +797,99 @@ function drawGauge(pct) {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  WEEK COMPARISON
+//  WEEK COMPARISON — toggle
+// ══════════════════════════════════════════════════════════════
+let WEEK_CMP_VISIBLE = true;
+function toggleWeekCmp() {
+  WEEK_CMP_VISIBLE = !WEEK_CMP_VISIBLE;
+  document.getElementById('weekCmpOuter').style.display = WEEK_CMP_VISIBLE ? '' : 'none';
+  document.getElementById('weekCmpToggle').textContent = WEEK_CMP_VISIBLE ? '▲ Скрыть' : '▼ Показать';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  WEEK COMPARISON — render
 // ══════════════════════════════════════════════════════════════
 function renderWeekComparison() {
   const block = document.getElementById('weekCmpBlock');
   const sp  = IS_MGR ? S.selSpec : SPEC_ID;
   const tgt = (sp==='manager'||sp==='Все') ? 'Все' : sp;
 
-  // Get week итог rows
-  const weekRows = S.monthly.filter(r => r['Специалист']===tgt && r['Тип']==='итог_нед')
-    .sort((a,b) => Number(a['Неделя']) - Number(b['Неделя']));
+  // Собираем все итоговые строки недель из ВСЕХ загруженных месяцев.
+  // S.monthly содержит данные текущего просматриваемого месяца.
+  // Для сравнения нам нужны "итог_нед" — отбираем все и сортируем по дате
+  // Формат Метка = "Итог нед.N", Неделя = N, Месяц = "2026-MM"
+  const weekRows = S.monthly
+    .filter(r => r['Специалист'] === tgt && r['Тип'] === 'итог_нед')
+    .sort((a,b) => {
+      // Сортируем по месяцу, потом по номеру недели
+      const ma = String(a['Месяц']||''), mb = String(b['Месяц']||'');
+      if (ma !== mb) return ma.localeCompare(mb);
+      return Number(a['Неделя']||0) - Number(b['Неделя']||0);
+    });
 
-  if (weekRows.length < 2) {
-    block.innerHTML = '<div class="empty">Недостаточно данных (нужно минимум 2 полных недели)</div>';
+  // Нужны последние 2 ПОЛНЫЕ недели относительно сегодня.
+  // "Полная" — неделя у которой все дни уже прошли.
+  // Определяем конец каждой недели по данным в monthly: берём максимальную дату
+  // через поле "Отработано" (MTD) и Неделя. Но проще: неделя "полная" если
+  // следующая отчётная неделя уже началась ИЛИ мы в следующем месяце.
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0,10);
+
+  // Фильтруем только завершённые недели:
+  // Неделя завершена если существует строка следующей недели (или следующего месяца)
+  // ИЛИ если мы уже перешли в следующий месяц.
+  // Простой подход: итог_нед считается завершённым если его месяц+неделя
+  // не является "текущей" незавершённой неделей.
+
+  // Текущая неделя = та, в которую попадает сегодня
+  const curMk = `${S.year}-${String(S.month).padStart(2,'0')}`;
+
+  // Ищем в данных строку дня с сегодняшней датой, чтобы узнать текущую неделю
+  const todayDayRow = S.monthly.find(r =>
+    r['Специалист'] === tgt &&
+    (r['Тип'] === 'день' || r['Тип'] === 'день_буд') &&
+    r['Месяц'] === curMk &&
+    // Метка — "dd.MM" — нужно сравнить с сегодня
+    r['Метка'] === (String(today.getDate()).padStart(2,'0') + '.' + String(today.getMonth()+1).padStart(2,'0'))
+  );
+  const curWeekNum = todayDayRow ? Number(todayDayRow['Неделя']||0) : 0;
+
+  // Завершённые недели = все, кроме текущей активной недели
+  const completeWeeks = weekRows.filter(r => {
+    const rowMk = String(r['Месяц']||'');
+    const rowW  = Number(r['Неделя']||0);
+    if (rowMk < curMk) return true;                        // прошлые месяцы — всё завершено
+    if (rowMk === curMk && rowW < curWeekNum) return true; // прошлые недели текущего месяца
+    return false;
+  });
+
+  if (completeWeeks.length < 2) {
+    block.innerHTML = '<div class="empty">Недостаточно данных — нужно минимум 2 завершённые недели</div>';
     return;
   }
 
-  // Last two completed weeks
-  const wA = weekRows[weekRows.length-2]; // предыдущая
-  const wB = weekRows[weekRows.length-1]; // последняя
+  // Берём последние 2
+  const wA = completeWeeks[completeWeeks.length - 2]; // предпредыдущая
+  const wB = completeWeeks[completeWeeks.length - 1]; // предыдущая (последняя завершённая)
 
-  const lblA = wA['Метка']||'';
-  const lblB = wB['Метка']||'';
+  const lblA = wA['Метка'] || `Нед.${wA['Неделя']} (${fmtDate(wA['Месяц']||'').slice(3)})`;
+  const lblB = wB['Метка'] || `Нед.${wB['Неделя']} (${fmtDate(wB['Месяц']||'').slice(3)})`;
 
-  // Metrics to compare — per direction "Общее"
-  // metric key: dir__MetricName
-  const METRICS = [
-    { n:'Клики',    k:'Общее__Клики',  type:'qty' },
-    { n:'CPC',      k:'Общее__CPC',    type:'cost' },
-    { n:'Заявки',   k:'Общее__MQL',    type:'qty' },
-    { n:'CR%',      k:'Общее__CR%',    type:'conv' },
-    { n:'БП',       k:'Общее__SQL',    type:'qty' },
-    { n:'%БП',      k:'Общее__%БП',   type:'conv' },
-    { n:'Расход',   k:'Общее__Расход', type:'neutral' },
-    { n:'CPL',      k:'Общее__CPL',    type:'cost' },
-    { n:'Цена БП',  k:'Общее__CPsql',  type:'cost' },
-  ];
+  // Добавляем подпись месяца если недели из разных месяцев
+  const mA = String(wA['Месяц']||''), mB = String(wB['Месяц']||'');
+  const crossMonth = mA !== mB;
+  const fullLblA = crossMonth ? `${lblA} (${MN_SHORT[Number(mA.slice(5))]})` : lblA;
+  const fullLblB = crossMonth ? `${lblB} (${MN_SHORT[Number(mB.slice(5))]})` : lblB;
 
-  // Build per-direction comparison if manager
-  const dirs = [...S.settings.dirs, 'Общее'];
-  const showDirs = IS_MGR ? dirs : (S.settings.dirs.length ? [...S.settings.dirs, 'Общее'] : ['Общее']);
+  const displayDirs = IS_MGR ? [...S.settings.dirs, 'Общее'] : ['Общее'];
 
-  let html = `<div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
-    <div class="week-label week-label-a">◀ ${lblA}</div>
-    <div class="week-label week-label-b">▶ ${lblB} (последняя)</div>
+  let html = `<div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+    <div class="week-label week-label-a">◀ ${fullLblA}</div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">vs</div>
+    <div class="week-label week-label-b">▶ ${fullLblB}</div>
   </div>`;
 
   html += `<div class="week-cmp-grid">`;
-
-  // Show for "Общее" + each direction if mgr
-  const displayDirs = IS_MGR ? dirs : ['Общее'];
   displayDirs.forEach((dir, di) => {
     const dirColor = DIR_COLORS[di % DIR_COLORS.length];
     const mKeys = [
@@ -806,15 +910,13 @@ function renderWeekComparison() {
       const vb = Number(wB[m.k])||0;
       const diff = vb - va;
       const pct  = va ? ((diff/va)*100).toFixed(1) : null;
-
       let arrow = '→', cls = 'neu';
       if (m.type !== 'neutral' && diff !== 0) {
         const improved = (m.type==='cost') ? diff < 0 : diff > 0;
-        arrow  = diff > 0 ? '↑' : '↓';
-        cls    = improved ? 'imp' : 'deg';
+        arrow = diff > 0 ? '↑' : '↓';
+        cls   = improved ? 'imp' : 'deg';
       }
       const fmt = (m.n==='Расход'||m.n==='CPL'||m.n==='Цена БП'||m.n==='CPC') ? fmtMshort : (m.n.includes('%') ? fmtPct : fmtN);
-
       html += `<div class="week-metric-row">
         <span class="wm-name">${m.n}</span>
         <div class="wm-vals">
@@ -1060,7 +1162,7 @@ function renderYrTable() {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  YEARLY CHARTS (side)
+//  YEARLY CHARTS
 // ══════════════════════════════════════════════════════════════
 function renderYrCharts() {
   const sp   = IS_MGR ? S.selSpec : SPEC_ID;
@@ -1068,36 +1170,66 @@ function renderYrCharts() {
 
   const sort = r => Number(r['Месяц_номер']||0);
   const fact = S.yearly.filter(r => r['Специалист']===tgt && r['Тип']==='факт' && sort(r)>0).sort((a,b)=>sort(a)-sort(b));
+  const planY = S.yearly.filter(r => r['Специалист']===tgt && r['Тип']==='план' && sort(r)>0).sort((a,b)=>sort(a)-sort(b));
 
-  const labels = fact.map(r => MN_SHORT[Number(r['Месяц_номер'])]||r['Месяц']);
-  const sqlFact = fact.map(r => Number(r['Общее__SQL'])||null);
+  const labels   = fact.map(r => MN_SHORT[Number(r['Месяц_номер'])]||r['Месяц']);
+  const sqlFact  = fact.map(r => Number(r['Общее__SQL'])||null);
+  const sqlPlan  = planY.map(r => Number(r['Общее__SQL'])||null);
+  const cpsqlFact = fact.map(r => { const v=r['Общее__CPsql']; return v!==null&&v!==''?Number(v):null; });
 
   const isDark = document.documentElement.dataset.theme === 'dark';
   const gridColor = isDark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.06)';
   const tickColor = isDark ? '#565c78' : '#8890ab';
 
-  if (CH.cYrSql) { CH.cYrSql.destroy(); }
-  const ctx = document.getElementById('cYrSql');
-  if (!ctx) return;
-  CH.cYrSql = new Chart(ctx, {
-    type:'line',
-    data:{labels, datasets:[{
-      label:'БП', data:sqlFact,
-      borderColor:'#5282FF', backgroundColor:'rgba(82,130,255,.1)',
-      fill:true, tension:.4,
-      pointBackgroundColor:'#5282FF', pointRadius:4, pointHoverRadius:6,
-      borderWidth:2
-    }]},
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false},
-        tooltip:{backgroundColor:'var(--bg3)',borderColor:'var(--border)',borderWidth:1,titleColor:tickColor,bodyColor:'var(--text)',titleFont:{family:'JetBrains Mono',size:9},bodyFont:{family:'JetBrains Mono',size:10}}},
-      scales:{
-        x:{grid:{color:gridColor},ticks:{color:tickColor,font:{family:'JetBrains Mono',size:9},maxRotation:45}},
-        y:{grid:{color:gridColor},ticks:{color:tickColor,font:{family:'JetBrains Mono',size:9}}}
+  // БП: факт бар + план линия
+  if (CH.cYrSql) { CH.cYrSql.destroy(); delete CH.cYrSql; }
+  const ctx1 = document.getElementById('cYrSql');
+  if (ctx1) {
+    CH.cYrSql = new Chart(ctx1, {
+      type:'bar',
+      data:{labels, datasets:[
+        {label:'Факт', data:sqlFact, type:'bar',
+          backgroundColor:'rgba(82,130,255,.55)', borderColor:'#5282FF', borderWidth:0, borderRadius:4},
+        {label:'План', data:sqlPlan, type:'line',
+          borderColor:'rgba(255,180,51,.8)', backgroundColor:'transparent',
+          borderWidth:2, borderDash:[4,3], pointRadius:3,
+          pointBackgroundColor:'rgba(255,180,51,.8)', tension:.3}
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:true,labels:{color:tickColor,font:{family:'JetBrains Mono',size:9},boxWidth:10,padding:8}},
+          tooltip:{backgroundColor:'var(--bg3)',borderColor:'var(--border)',borderWidth:1,titleColor:tickColor,bodyColor:'var(--text)',titleFont:{family:'JetBrains Mono',size:9},bodyFont:{family:'JetBrains Mono',size:10}}},
+        scales:{
+          x:{grid:{color:gridColor},ticks:{color:tickColor,font:{family:'JetBrains Mono',size:9},maxRotation:0}},
+          y:{grid:{color:gridColor},ticks:{color:tickColor,font:{family:'JetBrains Mono',size:9}}}
+        }
       }
-    }
-  });
+    });
+  }
+
+  // Цена БП: линия
+  if (CH.cYrCpsql) { CH.cYrCpsql.destroy(); delete CH.cYrCpsql; }
+  const ctx2 = document.getElementById('cYrCpsql');
+  if (ctx2) {
+    CH.cYrCpsql = new Chart(ctx2, {
+      type:'line',
+      data:{labels, datasets:[{
+        label:'Цена БП', data:cpsqlFact,
+        borderColor:'#52CCC2', backgroundColor:'rgba(82,204,194,.1)',
+        fill:true, tension:.4,
+        pointBackgroundColor:'#52CCC2', pointRadius:4, borderWidth:2
+      }]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false},
+          tooltip:{backgroundColor:'var(--bg3)',borderColor:'var(--border)',borderWidth:1,titleColor:tickColor,bodyColor:'var(--text)',titleFont:{family:'JetBrains Mono',size:9},bodyFont:{family:'JetBrains Mono',size:10}}},
+        scales:{
+          x:{grid:{color:gridColor},ticks:{color:tickColor,font:{family:'JetBrains Mono',size:9},maxRotation:0}},
+          y:{grid:{color:gridColor},ticks:{color:tickColor,font:{family:'JetBrains Mono',size:9}}}
+        }
+      }
+    });
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
