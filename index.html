@@ -324,6 +324,7 @@ body { background: var(--bg0); color: var(--text); font-family: var(--font); min
 <!-- TABS -->
 <div class="tabs" id="tabsBar">
   <button class="tab on"  onclick="switchTab('monthly',this)">Месяц</button>
+  <button class="tab"     onclick="switchTab('weekly',this)">Недели</button>
   <button class="tab"     onclick="switchTab('yearly',this)">Год</button>
   <button class="tab"     onclick="switchTab('input',this)">Ввод данных</button>
   <button class="tab mgr" onclick="switchTab('plan',this)" style="display:none">План</button>
@@ -377,18 +378,6 @@ body { background: var(--bg0); color: var(--text); font-family: var(--font); min
     </div>
   </div>
 
-  <!-- WEEK COMPARISON -->
-  <div class="sec-head" id="weekCmpHead">
-    <div class="sec-ttl">Сравнение недель</div>
-    <div class="sec-line"></div>
-    <button class="btn btn-ghost btn-sm" onclick="toggleWeekCmp()" id="weekCmpToggle">▲ Скрыть</button>
-  </div>
-  <div id="weekCmpOuter">
-  <div class="card week-cmp" id="weekCmpBlock">
-    <div class="empty">Загрузка...</div>
-  </div>
-  </div>
-
   <!-- MONTHLY TABLE -->
   <div class="sec-head"><div class="sec-ttl">Месячная динамика</div><div class="sec-line"></div></div>
   <div class="card tbl-outer" id="monTblWrap" style="margin-bottom:14px"><div class="empty">Загрузка...</div></div>
@@ -403,6 +392,49 @@ body { background: var(--bg0); color: var(--text); font-family: var(--font); min
       <div class="chart-side-ttl">💰 Цена БП (CPsql) по неделям</div>
       <div style="position:relative;height:180px"><canvas id="cMonCpsql"></canvas></div>
     </div>
+  </div>
+</div>
+
+<!-- ══ TAB: WEEKLY ══════════════════════════════════════════ -->
+<div class="page" id="tab-weekly">
+  <div class="toolbar">
+    <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">Анализ по неделям</div>
+    <div class="spec-tabs mgr" id="specTabsWk" style="display:none"></div>
+  </div>
+
+  <!-- БЛОК 1: Сравнение двух недель -->
+  <div class="sec-head">
+    <div class="sec-ttl">Сравнение двух недель</div>
+    <div class="sec-line"></div>
+  </div>
+  <div class="card" style="padding:16px 18px;margin-bottom:18px">
+    <!-- Селекторы недель -->
+    <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="week-label week-label-a" style="padding:4px 10px;font-size:11px">А</span>
+        <select class="fselect" id="wkSelA" style="min-width:150px;font-size:11px" onchange="onWkSel()">
+          <option>— загрузка —</option>
+        </select>
+      </div>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">vs</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select class="fselect" id="wkSelB" style="min-width:150px;font-size:11px" onchange="onWkSel()">
+          <option>— загрузка —</option>
+        </select>
+        <span class="week-label week-label-b" style="padding:4px 10px;font-size:11px">Б</span>
+      </div>
+    </div>
+    <!-- Таблица сравнения -->
+    <div id="wkCmpTblWrap"><div class="empty">Выберите недели</div></div>
+  </div>
+
+  <!-- БЛОК 2: Все недели + среднее -->
+  <div class="sec-head">
+    <div class="sec-ttl">Все недели — динамика и среднее</div>
+    <div class="sec-line"></div>
+  </div>
+  <div class="card tbl-outer" id="wkAllTblWrap" style="margin-bottom:18px">
+    <div class="empty">Загрузка...</div>
   </div>
 </div>
 
@@ -534,7 +566,6 @@ let S = {
 let CH = {};
 let YR_SHOW_PLAN = false;
 let gaugeChart = null;
-let WEEK_SEL = { a: null, b: null }; // { mk, weekNum, label } для каждого слота
 
 // ══════════════════════════════════════════════════════════════
 //  THEME
@@ -684,7 +715,6 @@ async function init() {
 
     updateMonLabel();
     renderKpi();
-    await renderWeekComparison();
     renderMonTable();
     renderMonCharts();
 
@@ -724,7 +754,6 @@ async function loadMonthly() {
 
     updateMonLabel();
     renderKpi();
-    await renderWeekComparison();
     renderMonTable();
     renderMonCharts();
 
@@ -904,13 +933,11 @@ function drawGauge(pct) {
   });
 }
 
-// ══════════════════════════════════════════════════════════════
-//  WEEK COMPARISON — сбор всех доступных недель
-// ══════════════════════════════════════════════════════════════
+}
 
-// Собирает все завершённые недели из кэша за последние N месяцев
-// Возвращает массив { mk, weekNum, label, fullLabel, row } отсортированный хронологически
-async function collectAllWeeks(tgt) {
+// ══════════════════════════════════════════════════════════════
+//  MONTHLY TABLE
+// ══════════════════════════════════════════════════════════════
   const curMk  = mkey(S.year, S.month);
   const today  = new Date();
   const sp     = IS_MGR ? S.selSpec : SPEC_ID;
@@ -974,196 +1001,6 @@ async function collectAllWeeks(tgt) {
     if (seen.has(k)) return false;
     seen.add(k); return true;
   });
-}
-
-// ══════════════════════════════════════════════════════════════
-//  WEEK COMPARISON — toggle
-// ══════════════════════════════════════════════════════════════
-let WEEK_CMP_VISIBLE = true;
-function toggleWeekCmp() {
-  WEEK_CMP_VISIBLE = !WEEK_CMP_VISIBLE;
-  document.getElementById('weekCmpOuter').style.display = WEEK_CMP_VISIBLE ? '' : 'none';
-  document.getElementById('weekCmpToggle').textContent = WEEK_CMP_VISIBLE ? '▲ Скрыть' : '▼ Показать';
-}
-
-// ══════════════════════════════════════════════════════════════
-//  WEEK COMPARISON — render
-// ══════════════════════════════════════════════════════════════
-async function renderWeekComparison() {
-  const block = document.getElementById('weekCmpBlock');
-  const sp  = IS_MGR ? S.selSpec : SPEC_ID;
-  const tgt = (sp==='manager'||sp==='Все') ? 'Все' : sp;
-
-  block.innerHTML = '<div class="empty">Загрузка недель...</div>';
-  const allWeeks = await collectAllWeeks(tgt);
-
-  if (allWeeks.length < 2) {
-    block.innerHTML = '<div class="empty">Недостаточно данных — нужно минимум 2 завершённые недели</div>';
-    return;
-  }
-
-  // Автовыбор: последние 2 завершённые, если выбор ещё не сделан или недоступен
-  const validKeys = new Set(allWeeks.map(w => `${w.mk}|${w.weekNum}`));
-  const selAKey = WEEK_SEL.a ? `${WEEK_SEL.a.mk}|${WEEK_SEL.a.weekNum}` : null;
-  const selBKey = WEEK_SEL.b ? `${WEEK_SEL.b.mk}|${WEEK_SEL.b.weekNum}` : null;
-
-  if (!selAKey || !validKeys.has(selAKey)) WEEK_SEL.a = allWeeks[allWeeks.length - 2];
-  if (!selBKey || !validKeys.has(selBKey)) WEEK_SEL.b = allWeeks[allWeeks.length - 1];
-
-  renderWeekCmpContent(allWeeks, tgt);
-}
-
-function renderWeekCmpContent(allWeeks, tgt) {
-  const block = document.getElementById('weekCmpBlock');
-
-  // Найти текущие выбранные недели в массиве allWeeks
-  const wA = allWeeks.find(w => w.mk === WEEK_SEL.a?.mk && w.weekNum === WEEK_SEL.a?.weekNum)
-          || allWeeks[allWeeks.length - 2];
-  const wB = allWeeks.find(w => w.mk === WEEK_SEL.b?.mk && w.weekNum === WEEK_SEL.b?.weekNum)
-          || allWeeks[allWeeks.length - 1];
-
-  // Синхронизируем WEEK_SEL с актуальными объектами из allWeeks (гарантируем наличие row)
-  WEEK_SEL.a = wA;
-  WEEK_SEL.b = wB;
-
-  const mkA = `${wA.mk}|${wA.weekNum}`;
-  const mkB = `${wB.mk}|${wB.weekNum}`;
-
-  const opts  = allWeeks.map(w =>
-    `<option value="${w.mk}|${w.weekNum}" ${`${w.mk}|${w.weekNum}`===mkA?'selected':''}>${weekLabel(w.mk, w.weekNum)}</option>`
-  ).join('');
-  const optsB = allWeeks.map(w =>
-    `<option value="${w.mk}|${w.weekNum}" ${`${w.mk}|${w.weekNum}`===mkB?'selected':''}>${weekLabel(w.mk, w.weekNum)}</option>`
-  ).join('');
-
-  const displayDirs = IS_MGR ? [...S.settings.dirs, 'Общее'] : ['Общее'];
-
-  let html = `
-  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-    <div style="display:flex;align-items:center;gap:6px">
-      <span class="week-label week-label-a" style="padding:3px 8px">◀</span>
-      <select class="fselect" style="min-width:130px;font-size:11px;padding:4px 8px" onchange="onWeekSelChange('a',this.value)">${opts}</select>
-    </div>
-    <span style="font-family:var(--mono);font-size:10px;color:var(--text3);padding:0 2px">vs</span>
-    <div style="display:flex;align-items:center;gap:6px">
-      <select class="fselect" style="min-width:130px;font-size:11px;padding:4px 8px" onchange="onWeekSelChange('b',this.value)">${optsB}</select>
-      <span class="week-label week-label-b" style="padding:3px 8px">▶</span>
-    </div>
-  </div>`;
-
-  html += `<div class="week-cmp-grid">`;
-  displayDirs.forEach((dir, di) => {
-    const dirColor = DIR_COLORS[di % DIR_COLORS.length];
-    const mKeys = [
-      {n:'Клики',   k:`${dir}__Клики`,  type:'qty'},
-      {n:'CPC',     k:`${dir}__CPC`,    type:'cost'},
-      {n:'Заявки',  k:`${dir}__MQL`,    type:'qty'},
-      {n:'CR%',     k:`${dir}__CR%`,    type:'conv'},
-      {n:'БП',      k:`${dir}__SQL`,    type:'qty'},
-      {n:'%БП',     k:`${dir}__%БП`,   type:'conv'},
-      {n:'Расход',  k:`${dir}__Расход`, type:'neutral'},
-      {n:'CPL',     k:`${dir}__CPL`,    type:'cost'},
-      {n:'Цена БП', k:`${dir}__CPsql`,  type:'cost'},
-    ];
-    html += `<div><div class="week-col-title" style="color:${dirColor}">📂 ${dir}</div>`;
-    mKeys.forEach(m => {
-      const va = Number(wA.row[m.k])||0;
-      const vb = Number(wB.row[m.k])||0;
-      const diff = vb - va;
-      const pct  = va ? ((diff/va)*100).toFixed(1) : null;
-      let arrow = '→', cls = 'neu';
-      if (m.type !== 'neutral' && diff !== 0) {
-        const improved = (m.type==='cost') ? diff < 0 : diff > 0;
-        arrow = diff > 0 ? '↑' : '↓';
-        cls   = improved ? 'imp' : 'deg';
-      }
-      const fmt = (m.n==='Расход'||m.n==='CPL'||m.n==='Цена БП'||m.n==='CPC') ? fmtMshort : (m.n.includes('%') ? fmtPct : fmtN);
-      html += `<div class="week-metric-row">
-        <span class="wm-name">${m.n}</span>
-        <div class="wm-vals">
-          <span class="wm-val prev">${fmt(va)}</span>
-          <span class="wm-arrow ${cls}">${arrow}</span>
-          <span class="wm-val">${fmt(vb)}</span>
-          <span class="wm-diff ${cls}">${pct!==null ? (diff>0?'+':'')+pct+'%' : ''}</span>
-        </div>
-      </div>`;
-    });
-    html += `</div>`;
-  });
-  html += `</div>`;
-  block.innerHTML = html;
-}
-
-function weekLabel(mk, weekNum) {
-  // "1 нед 03.26", "4 нед 02.26" etc
-  const mn = String(mk.slice(5)).padStart(2,'0');
-  const yr = mk.slice(2,4);
-  return `${weekNum} нед ${mn}.${yr}`;
-}
-
-function onWeekSelChange(slot, val) {
-  const [mk, wn] = val.split('|');
-  const weekNum  = Number(wn);
-  const sp  = IS_MGR ? S.selSpec : SPEC_ID;
-  const tgt = (sp==='manager'||sp==='Все') ? 'Все' : sp;
-
-  const sourceRows = mk === mkey(S.year, S.month)
-    ? S.monthly
-    : (cacheGet(cacheKey(sp, mk))?.monthly || []);
-
-  const row = sourceRows.find(r =>
-    r['Специалист'] === tgt &&
-    r['Тип'] === 'итог_нед' &&
-    _mkFromRow_(r, 'Месяц') === mk &&
-    Number(r['Неделя']||0) === weekNum
-  );
-  if (!row) { console.warn('row not found', mk, weekNum, tgt); return; }
-
-  WEEK_SEL[slot] = { mk, weekNum, row };
-
-  const allWeeks = collectAllWeeksSync(tgt);
-  if (allWeeks.length >= 2) renderWeekCmpContent(allWeeks, tgt);
-}
-
-function collectAllWeeksSync(tgt) {
-  const curMk = mkey(S.year, S.month);
-  const today = new Date();
-  const sp    = IS_MGR ? S.selSpec : SPEC_ID;
-
-  const todayDayRow = S.monthly.find(r =>
-    r['Специалист'] === tgt &&
-    (r['Тип'] === 'день' || r['Тип'] === 'день_буд') &&
-    r['Месяц'] === curMk &&
-    r['Метка'] === (String(today.getDate()).padStart(2,'0') + '.' + String(today.getMonth()+1).padStart(2,'0'))
-  );
-  const curWeekNum = todayDayRow ? Number(todayDayRow['Неделя']||0) : 0;
-
-  const sources = [{ mk: curMk, rows: S.monthly }];
-  for (let i = 1; i <= 3; i++) {
-    let pm = S.month - i, py = S.year;
-    while (pm < 1) { pm += 12; py--; }
-    const pmk = mkey(py, pm);
-    const cached = cacheGet(cacheKey(sp, pmk));
-    if (cached?.monthly?.length) sources.push({ mk: pmk, rows: cached.monthly });
-  }
-
-  const allWeeks = [];
-  const seen = new Set();
-  sources.forEach(src => {
-    src.rows
-      .filter(r => r['Специалист'] === tgt && r['Тип'] === 'итог_нед')
-      .forEach(r => {
-        const rowMk = _mkFromRow_(r, 'Месяц');
-        const rowW  = Number(r['Неделя']||0);
-        if (rowMk === curMk && rowW >= curWeekNum) return;
-        const k = `${rowMk}|${rowW}`;
-        if (seen.has(k)) return;
-        seen.add(k);
-        allWeeks.push({ mk: rowMk, weekNum: rowW, row: r });
-      });
-  });
-  allWeeks.sort((a, b) => a.mk !== b.mk ? a.mk.localeCompare(b.mk) : a.weekNum - b.weekNum);
-  return allWeeks;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1588,7 +1425,7 @@ async function renderPlanHistory() {
 // ══════════════════════════════════════════════════════════════
 function buildSpecTabs() {
   const all = [{id:'manager',name:'Все'}, ...S.settings.specs.filter(s=>s.id!=='manager')];
-  ['specTabsMon','specTabsYr'].forEach(id => {
+  ['specTabsMon','specTabsYr','specTabsWk'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.innerHTML = all.map(s =>
@@ -1599,11 +1436,11 @@ function buildSpecTabs() {
 
 async function selectSpec(id) {
   S.selSpec = id;
-  WEEK_SEL = { a: null, b: null };
   buildSpecTabs();
   const active = document.querySelector('.tab.on')?.textContent;
-  if (active?.includes('Месяц')) await loadMonthly();
-  if (active?.includes('Год'))   await loadYearly();
+  if (active?.includes('Месяц'))  await loadMonthly();
+  if (active?.includes('Недели')) await loadWeekly();
+  if (active?.includes('Год'))    await loadYearly();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1615,6 +1452,7 @@ async function switchTab(tab, btn) {
   btn.classList.add('on');
   document.getElementById('tab-'+tab).classList.add('on');
   if (tab==='monthly') await loadMonthly();
+  if (tab==='weekly')  await loadWeekly();
   if (tab==='yearly')  await loadYearly();
   if (tab==='input')   await loadLog();
   if (tab==='plan')    await renderPlanHistory();
@@ -1636,7 +1474,6 @@ async function onMonthPicked(val) {
   if (!val) return;
   const [y, m] = val.split('-').map(Number);
   S.year = y; S.month = m;
-  WEEK_SEL = { a: null, b: null };
   document.getElementById('monPicker').style.pointerEvents = 'none';
   await loadMonthly();
   await loadLog();
@@ -1644,12 +1481,10 @@ async function onMonthPicked(val) {
 
 async function prevMonth() {
   S.month--; if (S.month<1){S.month=12;S.year--;}
-  WEEK_SEL = { a: null, b: null };
   await loadMonthly(); await loadLog();
 }
 async function nextMonth() {
   S.month++; if (S.month>12){S.month=1;S.year++;}
-  WEEK_SEL = { a: null, b: null };
   await loadMonthly(); await loadLog();
 }
 
@@ -1659,9 +1494,10 @@ function updateMonLabel() {
 
 async function refreshData() {
   const active = document.querySelector('.tab.on')?.textContent;
-  if (active?.includes('Месяц')) await loadMonthly();
-  if (active?.includes('Год'))   await loadYearly();
-  if (active?.includes('Ввод'))  await loadLog();
+  if (active?.includes('Месяц'))  await loadMonthly();
+  if (active?.includes('Недели')) await loadWeekly();
+  if (active?.includes('Год'))    await loadYearly();
+  if (active?.includes('Ввод'))   await loadLog();
   showToast('Обновлено');
 }
 
@@ -1786,6 +1622,330 @@ if (SCRIPT_URL==='YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
 } else {
   init();
 }
+
+// ══════════════════════════════════════════════════════════════
+//  TAB: WEEKLY — состояние
+// ══════════════════════════════════════════════════════════════
+let WK = {
+  allWeeks: [],   // [{mk, weekNum, row}] — все завершённые недели, хронологически
+  loaded: false
+};
+
+// Человекочитаемый лейбл: "1 нед 03.26"
+function wkLabel(mk, weekNum) {
+  const mn  = mk.slice(5,7);   // "03"
+  const yr  = mk.slice(2,4);   // "26"
+  return `${weekNum} нед ${mn}.${yr}`;
+}
+
+// ── Загрузка: собираем недели за все месяцы с данными ──────────
+async function loadWeekly() {
+  load('Загрузка недель...');
+  try {
+    const sp  = IS_MGR ? S.selSpec : SPEC_ID;
+    const tgt = (sp === 'manager' || sp === 'Все') ? 'Все' : sp;
+
+    // Собираем данные за все 12 месяцев из кэша + грузим недостающие
+    const today = new Date();
+    const curMk = mkey(today.getFullYear(), today.getMonth() + 1);
+
+    const allWeeks = [];
+    const seen = new Set();
+
+    // Идём по месяцам от текущего назад — берём все что есть в кэше,
+    // а текущий и предыдущий грузим если нет
+    for (let i = 0; i <= 11; i++) {
+      let m = today.getMonth() + 1 - i, y = today.getFullYear();
+      while (m < 1) { m += 12; y--; }
+      const mk  = mkey(y, m);
+      const key = cacheKey(sp, mk);
+      let cached = cacheGet(key);
+
+      if (!cached) {
+        // Грузим только текущий и 3 предыдущих — дальше нет смысла без данных
+        if (i > 3) break;
+        try {
+          const res = await GET('getMonthBundle', { month: mk, spec: sp });
+          cached = { kpi: res.kpi||[], monthly: res.monthly||[] };
+          cacheSet(key, cached);
+        } catch(_) { break; }
+      }
+
+      const rows = cached.monthly || [];
+      // Определяем какие недели завершены для этого месяца
+      // Для прошлых месяцев — все итог_нед завершены
+      // Для текущего — только те, у которых weekNum < текущей активной недели
+      let curWeekNum = 0;
+      if (mk === curMk) {
+        const todayLabel = String(today.getDate()).padStart(2,'0') + '.' + String(today.getMonth()+1).padStart(2,'0');
+        const dayRow = rows.find(r =>
+          r['Специалист'] === tgt &&
+          (r['Тип'] === 'день' || r['Тип'] === 'день_буд') &&
+          _mkFromRow_(r, 'Месяц') === mk &&
+          r['Метка'] === todayLabel
+        );
+        curWeekNum = dayRow ? Number(dayRow['Неделя']||0) : 99;
+      }
+
+      rows
+        .filter(r =>
+          r['Специалист'] === tgt &&
+          r['Тип'] === 'итог_нед' &&
+          _mkFromRow_(r, 'Месяц') === mk &&
+          (mk < curMk || Number(r['Неделя']||0) < curWeekNum)
+        )
+        .forEach(r => {
+          const wn = Number(r['Неделя']||0);
+          const k  = `${mk}|${wn}`;
+          if (seen.has(k)) return;
+          seen.add(k);
+          allWeeks.push({ mk, weekNum: wn, row: r });
+        });
+
+      // Если нашли хоть какие-то данные в этом месяце — продолжаем назад
+      // Если месяц пустой — прекращаем
+      const hasAny = rows.some(r => r['Специалист'] === tgt && r['Тип'] === 'итог_нед');
+      if (!hasAny && i > 0) break;
+    }
+
+    // Хронологический порядок
+    allWeeks.sort((a, b) => a.mk !== b.mk ? a.mk.localeCompare(b.mk) : a.weekNum - b.weekNum);
+    WK.allWeeks = allWeeks;
+    WK.loaded   = true;
+
+    renderWkSelectors();
+    renderWkCmpTable();
+    renderWkAllTable(tgt);
+
+  } catch(e) { showToast('Ошибка: ' + e.message, true); console.error(e); }
+  finally { unload(); }
+}
+
+// ── Заполняем селекторы ────────────────────────────────────────
+function renderWkSelectors() {
+  const weeks = WK.allWeeks;
+  if (!weeks.length) return;
+
+  const opts = weeks.map(w =>
+    `<option value="${w.mk}|${w.weekNum}">${wkLabel(w.mk, w.weekNum)}</option>`
+  ).join('');
+
+  const selA = document.getElementById('wkSelA');
+  const selB = document.getElementById('wkSelB');
+  selA.innerHTML = opts;
+  selB.innerHTML = opts;
+
+  // Автовыбор: предпоследняя и последняя
+  if (weeks.length >= 2) {
+    selA.value = `${weeks[weeks.length-2].mk}|${weeks[weeks.length-2].weekNum}`;
+    selB.value = `${weeks[weeks.length-1].mk}|${weeks[weeks.length-1].weekNum}`;
+  }
+}
+
+function onWkSel() { renderWkCmpTable(); }
+
+// ── Блок 1: таблица сравнения двух выбранных недель ────────────
+function renderWkCmpTable() {
+  const wrap = document.getElementById('wkCmpTblWrap');
+  const valA = document.getElementById('wkSelA')?.value;
+  const valB = document.getElementById('wkSelB')?.value;
+  if (!valA || !valB || !WK.allWeeks.length) return;
+
+  const [mkA, wnA] = valA.split('|'); const wA = WK.allWeeks.find(w => w.mk===mkA && w.weekNum===Number(wnA));
+  const [mkB, wnB] = valB.split('|'); const wB = WK.allWeeks.find(w => w.mk===mkB && w.weekNum===Number(wnB));
+  if (!wA || !wB) { wrap.innerHTML='<div class="empty">Не найдены данные для выбранных недель</div>'; return; }
+
+  const sp   = IS_MGR ? S.selSpec : SPEC_ID;
+  const tgt  = (sp==='manager'||sp==='Все') ? 'Все' : sp;
+  const dirs = (tgt === 'Все') ? ['Общее'] : [...S.settings.dirs, 'Общее'];
+
+  const MKEYS = [
+    {n:'Клики',   k:'Клики',  type:'qty'},
+    {n:'CPC',     k:'CPC',    type:'cost'},
+    {n:'Заявки',  k:'MQL',    type:'qty'},
+    {n:'CR%',     k:'CR%',    type:'conv'},
+    {n:'БП',      k:'SQL',    type:'qty'},
+    {n:'%БП',     k:'%БП',   type:'conv'},
+    {n:'Расход',  k:'Расход', type:'neutral'},
+    {n:'CPL',     k:'CPL',    type:'cost'},
+    {n:'Цена БП', k:'CPsql',  type:'cost'},
+  ];
+
+  let html = `<div style="overflow-x:auto"><table class="mtbl" style="min-width:500px">
+    <thead>
+      <tr>
+        <th class="fix" style="min-width:90px">Метрика</th>`;
+  dirs.forEach((d,i) => {
+    html += `<th class="dh" colspan="3" style="background:${DIR_BG[i%DIR_BG.length]};border-left:2px solid ${DIR_COLORS[i%DIR_COLORS.length]}">${d}</th>`;
+  });
+  html += `</tr><tr><th class="fix"></th>`;
+  dirs.forEach((_,i) => {
+    html += `<th class="col-dir${i}" style="min-width:80px">${wkLabel(mkA, Number(wnA))}</th>`;
+    html += `<th class="col-dir${i}" style="min-width:80px">${wkLabel(mkB, Number(wnB))}</th>`;
+    html += `<th class="col-dir${i}" style="min-width:60px">Δ</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+
+  MKEYS.forEach(m => {
+    html += `<tr><td class="fix" style="color:var(--text2)">${m.n}</td>`;
+    dirs.forEach((dir, i) => {
+      const va  = Number(wA.row[`${dir}__${m.k}`])||0;
+      const vb  = Number(wB.row[`${dir}__${m.k}`])||0;
+      const diff = vb - va;
+      const pct  = va ? ((diff/va)*100).toFixed(1) : null;
+      let diffCls = 'neu';
+      if (diff !== 0 && m.type !== 'neutral') {
+        const improved = m.type === 'cost' ? diff < 0 : diff > 0;
+        diffCls = improved ? 'imp' : 'deg';
+      }
+      const fmt = (m.k==='Расход'||m.k==='CPL'||m.k==='CPsql'||m.k==='CPC') ? fmtN : (m.k.includes('%') ? v => v?v.toFixed(1)+'%':'—' : fmtN);
+      html += `<td class="col-dir${i}">${fmt(va)}</td>`;
+      html += `<td class="col-dir${i}" style="color:var(--text);font-weight:600">${fmt(vb)}</td>`;
+      html += `<td class="col-dir${i} ${diffCls}" style="font-size:10px">${pct!==null?(diff>0?'+':'')+pct+'%':'—'}</td>`;
+    });
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+  wrap.innerHTML = html;
+}
+
+// ── Блок 2: все недели строчно + среднее + сравнение с последней ─
+function renderWkAllTable(tgt) {
+  const wrap  = document.getElementById('wkAllTblWrap');
+  const weeks = WK.allWeeks;
+  if (!weeks.length) { wrap.innerHTML='<div class="empty">Нет завершённых недель</div>'; return; }
+
+  const sp  = IS_MGR ? S.selSpec : SPEC_ID;
+  if (!tgt) tgt = (sp==='manager'||sp==='Все') ? 'Все' : sp;
+
+  // Направления зависят от выбранного специалиста:
+  // — конкретный специалист (не "Все") → его направления + Общее
+  // — "Все" → только Общее (агрегат уже посчитан)
+  const dirs = (tgt === 'Все')
+    ? ['Общее']
+    : [...S.settings.dirs, 'Общее'];
+
+  // Базовые показатели для взвешенного среднего (суммируемые)
+  const BASE = ['Клики','Расход','MQL','SQL'];
+  // Все отображаемые колонки
+  const MKEYS = [
+    {n:'Клики',   k:'Клики',  type:'qty',     base:true},
+    {n:'CPC',     k:'CPC',    type:'cost',    base:false},
+    {n:'Заявки',  k:'MQL',    type:'qty',     base:true},
+    {n:'CR%',     k:'CR%',    type:'conv',    base:false},
+    {n:'БП',      k:'SQL',    type:'qty',     base:true},
+    {n:'%БП',     k:'%БП',   type:'conv',    base:false},
+    {n:'Расход',  k:'Расход', type:'neutral', base:true},
+    {n:'CPL',     k:'CPL',    type:'cost',    base:false},
+    {n:'Цена БП', k:'CPsql',  type:'cost',    base:false},
+  ];
+
+  // Суммируем базовые метрики для взвешенного среднего
+  const bsums = {}; // dir → {Клики, Расход, MQL, SQL}
+  dirs.forEach(dir => { bsums[dir] = {Клики:0, Расход:0, MQL:0, SQL:0}; });
+  weeks.forEach(w => {
+    dirs.forEach(dir => {
+      bsums[dir].Клики  += Number(w.row[`${dir}__Клики`])||0;
+      bsums[dir].Расход += Number(w.row[`${dir}__Расход`])||0;
+      bsums[dir].MQL    += Number(w.row[`${dir}__MQL`])||0;
+      bsums[dir].SQL    += Number(w.row[`${dir}__SQL`])||0;
+    });
+  });
+
+  // Считаем среднее: базовые — делим сумму на кол-во недель; производные — из базовых сумм
+  const n = weeks.length;
+  const avg = {};
+  dirs.forEach(dir => {
+    const b = bsums[dir];
+    const avgC = n ? b.Клики/n  : 0;
+    const avgR = n ? b.Расход/n : 0;
+    const avgM = n ? b.MQL/n    : 0;
+    const avgS = n ? b.SQL/n    : 0;
+    avg[dir] = {
+      'Клики':  avgC,
+      'MQL':    avgM,
+      'SQL':    avgS,
+      'Расход': avgR,
+      'CPC':    avgC ? avgR/avgC : 0,
+      'CR%':    avgC ? avgM/avgC*100 : 0,
+      '%БП':    avgM ? avgS/avgM*100 : 0,
+      'CPL':    avgM ? avgR/avgM : 0,
+      'CPsql':  avgS ? avgR/avgS : 0,
+    };
+  });
+
+  const lastWeek = weeks[weeks.length - 1];
+
+  const fmtV = (v, k) => {
+    if (v===null||v===undefined||isNaN(Number(v))||Number(v)===0)
+      return '<span class="null-v">—</span>';
+    const n2 = Number(v);
+    if (k==='Расход'||k==='CPL'||k==='CPsql'||k==='CPC') return fmtN(Math.round(n2));
+    if (k==='CR%'||k==='%БП') return n2.toFixed(1)+'%';
+    return fmtN(n2);
+  };
+
+  const deltaCell = (val, avgVal, type) => {
+    if (!avgVal || !val) return '<span class="null-v">—</span>';
+    const diff = val - avgVal;
+    const pct  = (diff / avgVal * 100).toFixed(1);
+    let cls = 'neu';
+    if (diff !== 0 && type !== 'neutral') {
+      cls = (type === 'cost' ? diff < 0 : diff > 0) ? 'imp' : 'deg';
+    }
+    return `<span class="${cls}" style="font-size:11px">${diff>0?'+':''}${pct}%</span>`;
+  };
+
+  // Шапка
+  let html = `<table class="mtbl"><thead>
+    <tr><th class="fix" style="min-width:110px">Неделя</th>`;
+  dirs.forEach((d,i) => {
+    html += `<th class="dh" colspan="${MKEYS.length}" style="background:${DIR_BG[i%DIR_BG.length]};border-left:2px solid ${DIR_COLORS[i%DIR_COLORS.length]}">${d}</th>`;
+  });
+  html += `</tr><tr><th class="fix"></th>`;
+  dirs.forEach((_,i) => {
+    MKEYS.forEach(m => { html += `<th class="col-dir${i}">${m.n}</th>`; });
+  });
+  html += `</tr></thead><tbody>`;
+
+  // Строки недель
+  weeks.forEach(w => {
+    const isLast = w.mk === lastWeek.mk && w.weekNum === lastWeek.weekNum;
+    const rowStyle = isLast ? ' style="background:rgba(82,130,255,.06)"' : '';
+    html += `<tr${rowStyle}><td class="fix" style="font-weight:${isLast?700:400};color:${isLast?'var(--accent)':'var(--text2)'}">${wkLabel(w.mk, w.weekNum)}</td>`;
+    dirs.forEach((dir, i) => {
+      MKEYS.forEach(m => {
+        const v = Number(w.row[`${dir}__${m.k}`])||0;
+        html += `<td class="col-dir${i}">${fmtV(v, m.k)}</td>`;
+      });
+    });
+    html += `</tr>`;
+  });
+
+  // Строка среднего
+  html += `<tr class="r-week"><td class="fix">⌀ Среднее (${n} нед.)</td>`;
+  dirs.forEach((dir, i) => {
+    MKEYS.forEach(m => {
+      html += `<td class="col-dir${i}">${fmtV(avg[dir][m.k], m.k)}</td>`;
+    });
+  });
+  html += `</tr>`;
+
+  // Строка последняя vs среднее
+  html += `<tr class="r-trend"><td class="fix" style="color:var(--teal)">▲▼ Послед. vs ⌀</td>`;
+  dirs.forEach((dir, i) => {
+    MKEYS.forEach(m => {
+      const v = Number(lastWeek.row[`${dir}__${m.k}`])||0;
+      html += `<td class="col-dir${i}">${deltaCell(v, avg[dir][m.k], m.type)}</td>`;
+    });
+  });
+  html += `</tr>`;
+
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+}
+
 </script>
 </body>
 </html>
